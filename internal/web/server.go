@@ -886,14 +886,18 @@ func handleUpdateAISettings(store *sqlite.Store, cfg *config.Config) http.Handle
 			return
 		}
 
-		// Store AI settings in database
+		// Store AI settings in database AND update in-memory config
 		_ = store.SetSetting(r.Context(), "ai_provider", req.Provider)
 		_ = store.SetSetting(r.Context(), "ai_model", req.Model)
 		_ = store.SetSetting(r.Context(), "ai_enabled", strconv.FormatBool(req.Enabled))
 		// Only update API key if provided (don't clear existing key)
 		if req.APIKey != "" {
 			_ = store.SetSetting(r.Context(), "ai_api_key", req.APIKey)
+			cfg.AI.APIKey = req.APIKey
 		}
+		cfg.AI.Provider = req.Provider
+		cfg.AI.Model = req.Model
+		cfg.AI.Enabled = req.Enabled
 		_ = store.InsertAuditLog(r.Context(), "settings_updated", "admin", "AI settings updated", map[string]any{
 			"provider": req.Provider,
 			"model":   req.Model,
