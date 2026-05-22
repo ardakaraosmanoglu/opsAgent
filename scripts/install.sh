@@ -77,7 +77,7 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
         echo "active"
         echo ""
         echo "Dashboard:"
-        echo "http://127.0.0.1:8787"
+        echo "http://$(hostname -I | awk '{print $1}'):8787"
     else
         echo "Service failed to start. Check logs with: journalctl -u opsagent -n 50"
         exit 1
@@ -98,7 +98,7 @@ app:
   environment: "production"
 
 server:
-  bind_address: "127.0.0.1"
+  bind_address: "0.0.0.0"
   port: 8787
 
 database:
@@ -170,15 +170,11 @@ EOF
         echo "active"
         echo ""
         echo "Dashboard:"
-        echo "http://127.0.0.1:8787"
+        echo "http://$(hostname -I | awk '{print $1}'):8787"
         echo ""
-        echo "To access the dashboard from your computer:"
+        echo "Access dashboard directly:"
         echo ""
-        echo "  ssh -L 8787:localhost:8787 root@YOUR_SERVER_IP"
-        echo ""
-        echo "Then open:"
-        echo ""
-        echo "  http://localhost:8787"
+        echo "  http://YOUR_SERVER_IP:8787"
         echo ""
         echo "Your server data stays on this machine."
         echo "No write operation will run without approval."
