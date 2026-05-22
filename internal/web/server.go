@@ -13,6 +13,7 @@ import (
 
 	"github.com/opsagent/opsagent/internal/config"
 	"github.com/opsagent/opsagent/internal/infrastructure/executor"
+	"github.com/opsagent/opsagent/internal/ui"
 	"github.com/opsagent/opsagent/internal/infrastructure/storage/sqlite"
 	"github.com/opsagent/opsagent/internal/usecase"
 	"golang.org/x/crypto/bcrypt"
@@ -23,7 +24,7 @@ func NewRouter(cfg *config.Config, store *sqlite.Store) http.Handler {
 
 	mux.HandleFunc("/api/system/service-status", methodGuard("GET", handleServiceStatus(cfg)))
 	mux.HandleFunc("/health", methodGuard("GET", handleHealth()))
-	mux.HandleFunc("/", methodGuard("GET", handleRoot()))
+	mux.HandleFunc("/", handleRoot())
 
 	// Auth routes
 	mux.HandleFunc("/api/setup/required", methodGuard("GET", handleSetupRequired(store)))
@@ -50,6 +51,8 @@ func NewRouter(cfg *config.Config, store *sqlite.Store) http.Handler {
 	mux.HandleFunc("/api/settings/password", methodGuard("POST", authMiddleware(store, handleUpdatePassword(store))))
 	mux.HandleFunc("/api/settings/access-mode", methodGuard("PATCH", authMiddleware(store, handleUpdateAccessMode(store, cfg))))
 	mux.HandleFunc("/api/system/info", methodGuard("GET", authMiddleware(store, handleSystemInfo(store))))
+	mux.HandleFunc("/api/system/update-check", methodGuard("GET", authMiddleware(store, handleUpdateCheck(store))))
+	mux.HandleFunc("/api/system/update", methodGuard("POST", authMiddleware(store, handleUpdateAgent(store))))
 
 	return withSecurityHeaders(mux)
 }
@@ -66,10 +69,31 @@ func methodGuard(expectedMethod string, fn http.HandlerFunc) http.HandlerFunc {
 
 func handleServiceStatus(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		var output string
+		var err error
+
+		// Run systemctl status opsagent --no-pager
+		runner := executor.NewRunner(10, 64)
+		result, execErr := runner.Run(ctx, "systemctl status opsagent --no-pager")
+
+		if execErr != nil {
+			output = "Service status unavailable: " + execErr.Error()
+		} else {
+			output = result.Stdout
+			if result.Stderr != "" {
+				output = output + "\n[stderr]\n" + result.Stderr
+			}
+		}
+
+		_ = err
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		json.NewEncoder(w).Encode(map[string]any{
 			"status":  "ok",
 			"version": "0.1.0",
+			"output":  output,
 		})
 	}
 }
@@ -82,12 +106,18 @@ func handleHealth() http.HandlerFunc {
 
 func handleRoot() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
+		// Serve React app for all non-API routes
+		if r.URL.Path == "/" || !strings.HasPrefix(r.URL.Path, "/api") {
+			index, err := ui.Files.ReadFile("dist/index.html")
+			if err != nil {
+				http.Error(w, "Dashboard not found. Run: cd web/dashboard && npm run build", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html")
+			w.Write(index)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte("<html><body><h1>OpsAgent</h1><p>Under construction. Dashboard coming soon.</p></body></html>"))
+		http.NotFound(w, r)
 	}
 }
 
@@ -877,6 +907,124 @@ func handleUpdateAccessMode(store *sqlite.Store, cfg *config.Config) http.Handle
 		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"message": "bind_address updated. Restart required for changes to take effect.",
+		})
+	}
+}
+
+func handleUpdateCheck(store *sqlite.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		runner := executor.NewRunner(30, 128)
+		result, err := runner.Run(ctx, "curl -fsSL https://api.github.com/repos/ardakaraosmanoglu/opsAgent/releases/latest")
+
+		var latestVersion string
+		var downloadURL string
+
+		if err == nil {
+			// Try to parse tag_name from JSON response
+			var release map[string]any
+			if json.Unmarshal([]byte(result.Stdout), &release) == nil {
+				if tag, ok := release["tag_name"].(string); ok {
+					latestVersion = tag
+				}
+				if assets, ok := release["assets"].([]any); ok && len(assets) > 0 {
+					for _, a := range assets {
+						if asset, ok := a.(map[string]any); ok {
+							if name, _ := asset["name"].(string); name == "opsagent-linux-amd64" {
+								if url, _ := asset["browser_download_url"].(string); url != "" {
+									downloadURL = url
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		currentVersion := "0.1.0"
+		needsUpdate := false
+		if latestVersion != "" && latestVersion != currentVersion {
+			needsUpdate = true
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"current_version": currentVersion,
+			"latest_version":  latestVersion,
+			"needs_update":    needsUpdate,
+			"download_url":    downloadURL,
+		})
+	}
+}
+
+func handleUpdateAgent(store *sqlite.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		ctx := r.Context()
+
+		// Get latest release info first
+		runner := executor.NewRunner(30, 128)
+		result, err := runner.Run(ctx, "curl -fsSL https://api.github.com/repos/ardakaraosmanoglu/opsAgent/releases/latest")
+
+		var downloadURL string
+		if err == nil {
+			var release map[string]any
+			if json.Unmarshal([]byte(result.Stdout), &release) == nil {
+				if assets, ok := release["assets"].([]any); ok {
+					for _, a := range assets {
+						if asset, ok := a.(map[string]any); ok {
+							if name, _ := asset["name"].(string); name == "opsagent-linux-amd64" {
+								if url, _ := asset["browser_download_url"].(string); url != "" {
+									downloadURL = url
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if downloadURL == "" {
+			http.Error(w, "failed to find download URL", http.StatusInternalServerError)
+			return
+		}
+
+		// Download new binary to temp location
+		_, err = runner.Run(ctx, fmt.Sprintf("curl -fsSL -L %s -o /tmp/opsagent-new && chmod +x /tmp/opsagent-new", downloadURL))
+		if err != nil {
+			http.Error(w, "failed to download update: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Stop service, replace binary, restart
+		commands := []string{
+			"systemctl stop opsagent",
+			"mv /tmp/opsagent-new /usr/local/bin/opsagent",
+			"chmod 755 /usr/local/bin/opsagent",
+			"systemctl start opsagent",
+		}
+
+		for _, cmd := range commands {
+			_, err = runner.Run(ctx, cmd)
+			if err != nil {
+				http.Error(w, "update failed at: "+cmd+" - "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		_ = store.InsertAuditLog(ctx, "agent_updated", "admin", "Agent updated to latest version", map[string]any{
+			"download_url": downloadURL,
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"message": "Agent updated successfully. Service restarted.",
 		})
 	}
 }

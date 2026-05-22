@@ -64,4 +64,9 @@ export const api = {
     request('/settings/ai', { method: 'POST', body: JSON.stringify(data) }),
   updatePassword: (currentPassword: string, newPassword: string) =>
     request('/settings/password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
+
+  // System
+  getServiceStatus: () => request<any>('/system/service-status'),
+  checkForUpdate: () => request<any>('/system/update-check'),
+  updateAgent: () => request<any>('/system/update', { method: 'POST' }),
 }

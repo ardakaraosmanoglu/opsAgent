@@ -3,11 +3,17 @@
 
 # Binaries
 opsagent
+opsagent-test
+opsagent-linux-amd64
+opsagent-linux-arm64
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+
+# Embedded React UI (generated during build)
+internal/ui/dist/
 
 # Test binary
 *.test
@@ -17,6 +23,8 @@ opsagent
 
 # node_modules (React dashboard)
 web/dashboard/node_modules/
+web/dashboard/.omc/
+web/dashboard/dist/
 
 # IDE
 .idea/

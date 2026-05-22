@@ -15,6 +15,16 @@ export default function SettingsPage() {
   const [passwordMsg, setPasswordMsg] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
 
+  // Service status
+  const [serviceStatus, setServiceStatus] = useState<any>(null)
+  const [serviceLoading, setServiceLoading] = useState(true)
+
+  // Agent update
+  const [updateInfo, setUpdateInfo] = useState<any>(null)
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const [updateMsg, setUpdateMsg] = useState('')
+
   useEffect(() => {
     api.getSettings().then(data => {
       const ai = data.ai || {}
@@ -22,6 +32,18 @@ export default function SettingsPage() {
       setProvider(ai.provider || '')
       setApiKey(ai.api_key || '')
       setModel(ai.model || '')
+    }).catch(console.error)
+
+    // Load service status
+    api.getServiceStatus().then(data => {
+      setServiceStatus(data)
+    }).catch(err => {
+      setServiceStatus({ output: 'Failed to load service status: ' + err.message })
+    }).finally(() => setServiceLoading(false))
+
+    // Check for updates
+    api.checkForUpdate().then(data => {
+      setUpdateInfo(data)
     }).catch(console.error)
   }, [])
 
@@ -35,6 +57,33 @@ export default function SettingsPage() {
       setMsg('Error: ' + err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleCheckUpdate() {
+    setUpdateChecking(true)
+    setUpdateMsg('')
+    try {
+      const data = await api.checkForUpdate()
+      setUpdateInfo(data)
+      setUpdateMsg(data.needs_update ? 'Update available: ' + data.latest_version : 'You are on the latest version.')
+    } catch (err: any) {
+      setUpdateMsg('Update check failed: ' + err.message)
+    } finally {
+      setUpdateChecking(false)
+    }
+  }
+
+  async function handleUpdateAgent() {
+    setUpdating(true)
+    setUpdateMsg('')
+    try {
+      await api.updateAgent()
+      setUpdateMsg('Agent updated successfully. Service restarted.')
+    } catch (err: any) {
+      setUpdateMsg('Update failed: ' + err.message)
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -110,6 +159,44 @@ export default function SettingsPage() {
         </div>
         {passwordMsg && <div style={{marginBottom:16, color: passwordMsg.startsWith('Error') ? '#f87171' : '#86efac'}}>{passwordMsg}</div>}
         <button className="primary" onClick={handleChangePassword} disabled={changingPassword}>{changingPassword ? 'Changing...' : 'Change Password'}</button>
+      </div>
+
+      <div className="card" style={{maxWidth:600, marginTop:24}}>
+        <h2 className="section-title">Service Status</h2>
+        <div style={{marginBottom:16}}>
+          {serviceLoading ? (
+            <div style={{color:'#94a3b8'}}>Loading service status...</div>
+          ) : (
+            <pre style={{fontSize:12, background:'#1e293b', padding:12, borderRadius:6, overflow:'auto', maxHeight:200, color:'#e2e8f0', whiteSpace:'pre-wrap'}}>
+              {serviceStatus?.output || 'No output'}
+            </pre>
+          )}
+        </div>
+        <button className="secondary" onClick={() => { setServiceLoading(true); api.getServiceStatus().then(d => { setServiceStatus(d); setServiceLoading(false) }).catch(e => { setServiceStatus({output: 'Error: '+e.message}); setServiceLoading(false) }) }}>
+          Refresh Status
+        </button>
+      </div>
+
+      <div className="card" style={{maxWidth:600, marginTop:24}}>
+        <h2 className="section-title">Agent Update</h2>
+        <div style={{marginBottom:16, color:'#94a3b8', fontSize:14}}>
+          <div>Current version: <span style={{color:'#e2e8f0'}}>0.1.0</span></div>
+          <div>Latest version: <span style={{color:'#e2e8f0'}}>{updateInfo?.latest_version || 'Unknown'}</span></div>
+          {updateInfo?.needs_update && (
+            <div style={{marginTop:8, color:'#fcd34d'}}>New version available!</div>
+          )}
+        </div>
+        {updateMsg && <div style={{marginBottom:16, color: updateMsg.includes('failed') || updateMsg.includes('Error') ? '#f87171' : '#86efac'}}>{updateMsg}</div>}
+        <div style={{display:'flex', gap:12}}>
+          <button className="secondary" onClick={handleCheckUpdate} disabled={updateChecking}>
+            {updateChecking ? 'Checking...' : 'Check for Updates'}
+          </button>
+          {updateInfo?.needs_update && (
+            <button className="primary" onClick={handleUpdateAgent} disabled={updating}>
+              {updating ? 'Updating...' : 'Update Now'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
