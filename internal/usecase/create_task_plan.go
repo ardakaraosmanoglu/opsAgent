@@ -17,7 +17,6 @@ func CreateTaskPlanFromPrompt(ctx context.Context, cfg *config.Config, store *sq
 	}
 
 	var plan *ai.Plan
-	var requiresApproval bool
 
 	// Try AI if configured
 	if cfg.AI.Enabled && cfg.AI.APIKey != "" {
@@ -63,25 +62,31 @@ func CreateTaskPlanFromPrompt(ctx context.Context, cfg *config.Config, store *sq
 		}
 	}
 
-	requiresApproval = false
+	// Classify commands and separate read-only from write operations
+	var readOnlyCommands []string
+	var requiresApproval bool
+	var hasBlocked bool
+
 	for i := range plan.Commands {
 		result := policy.Classify(plan.Commands[i].Command)
 
 		if !result.Allowed {
 			plan.Commands[i].Command = "BLOCKED:" + plan.Commands[i].Command
 			plan.Commands[i].RiskLevel = "critical"
-			requiresApproval = false
+			hasBlocked = true
 			continue
 		}
 
 		if result.RequiresApproval {
 			requiresApproval = true
+		} else {
+			readOnlyCommands = append(readOnlyCommands, plan.Commands[i].Command)
 		}
 	}
 
-	status := "completed"
-	if requiresApproval {
-		status = "waiting_approval"
+	// If has blocked commands, don't allow execution
+	if hasBlocked {
+		requiresApproval = true
 	}
 
 	riskLevel := plan.RiskLevel
@@ -94,12 +99,13 @@ func CreateTaskPlanFromPrompt(ctx context.Context, cfg *config.Config, store *sq
 		return nil, err
 	}
 
+	// Store commands in DB
 	for _, cmd := range plan.Commands {
 		cmdType := "read"
 		risk := "low"
 		requiresApprovalCmd := false
 
-		if cmd.Command != "" && len(cmd.Command) > 8 && cmd.Command[:8] == "BLOCKED:" {
+		if cmd.Command != "" && strings.HasPrefix(cmd.Command, "BLOCKED:") {
 			cmdType = "blocked"
 			risk = "critical"
 		} else {
@@ -120,6 +126,39 @@ func CreateTaskPlanFromPrompt(ctx context.Context, cfg *config.Config, store *sq
 		}
 	}
 
+	// For read-only queries (no approval needed), execute commands and return answer
+	if !requiresApproval && len(readOnlyCommands) > 0 {
+		// Execute read-only commands
+		output, execErr := ExecuteReadOnlyCommands(ctx, cfg, readOnlyCommands)
+		if execErr != nil {
+			output = "Command execution error: " + execErr.Error()
+		}
+
+		// Generate natural language answer
+		answer, _ := GenerateAnswer(ctx, cfg, prompt, output)
+
+		status := "completed"
+		if err := store.UpdateTaskStatus(ctx, taskID, status); err != nil {
+			return nil, err
+		}
+
+		_ = store.InsertAuditLog(ctx, "prompt_submitted", "assistant", prompt, map[string]any{
+			"task_id":    taskID,
+			"plan_id":    planID,
+			"type":       "read_only",
+			"answer":     answer,
+		})
+
+		return map[string]any{
+			"type":              "answer",
+			"task_id":           taskID,
+			"summary":           answer,
+			"requires_approval": false,
+		}, nil
+	}
+
+	// For write operations requiring approval, return plan
+	status := "waiting_approval"
 	if err := store.UpdateTaskStatus(ctx, taskID, status); err != nil {
 		return nil, err
 	}
@@ -130,16 +169,11 @@ func CreateTaskPlanFromPrompt(ctx context.Context, cfg *config.Config, store *sq
 		"status":  status,
 	})
 
-	responseType := "answer"
-	if status == "waiting_approval" {
-		responseType = "plan"
-	}
-
 	return map[string]any{
-		"type":              responseType,
+		"type":              "plan",
 		"task_id":           taskID,
 		"summary":           plan.Summary,
-		"requires_approval": requiresApproval,
+		"requires_approval": true,
 	}, nil
 }
 
@@ -150,27 +184,101 @@ type fallbackPlan struct {
 }
 
 func buildFallbackPlan(prompt string) fallbackPlan {
-	if contains(prompt, "disk") {
+	lower := strings.ToLower(prompt)
+
+	// Disk analysis
+	if strings.Contains(lower, "disk") || strings.Contains(lower, "alan") || strings.Contains(lower, "doluyor") {
 		return fallbackPlan{
 			Summary:   "Analyzing disk usage",
 			RiskLevel: "low",
 			Commands: []sqlite.FallbackCommand{
 				{Command: "df -h", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
 				{Command: "du -sh /var/log/* 2>/dev/null | sort -rh | head -10", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+				{Command: "df -i 2>/dev/null | sort -k5 -rh | head -10", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
 			},
 		}
 	}
 
+	// Memory analysis
+	if strings.Contains(lower, "memory") || strings.Contains(lower, "ram") || strings.Contains(lower, "bellek") {
+		return fallbackPlan{
+			Summary:   "Analyzing memory usage",
+			RiskLevel: "low",
+			Commands: []sqlite.FallbackCommand{
+				{Command: "free -m", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+				{Command: "ps aux --sort=-%mem | head -10", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			},
+		}
+	}
+
+	// CPU analysis
+	if strings.Contains(lower, "cpu") || strings.Contains(lower, "işlemci") || strings.Contains(lower, "yüksek") {
+		return fallbackPlan{
+			Summary:   "Analyzing CPU usage",
+			RiskLevel: "low",
+			Commands: []sqlite.FallbackCommand{
+				{Command: "top -bn1 | head -20", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+				{Command: "uptime", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			},
+		}
+	}
+
+	// Port analysis
+	if strings.Contains(lower, "port") || strings.Contains(lower, "açık") || strings.Contains(lower, "listening") {
+		return fallbackPlan{
+			Summary:   "Analyzing open ports",
+			RiskLevel: "low",
+			Commands: []sqlite.FallbackCommand{
+				{Command: "ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			},
+		}
+	}
+
+	// Service analysis
+	if strings.Contains(lower, "service") || strings.Contains(lower, "servis") || strings.Contains(lower, "nginx") || strings.Contains(lower, "docker") {
+		return fallbackPlan{
+			Summary:   "Analyzing services",
+			RiskLevel: "low",
+			Commands: []sqlite.FallbackCommand{
+				{Command: "systemctl list-units --type=service --state=running | head -30", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+				{Command: "docker ps 2>/dev/null || echo 'Docker not available'", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			},
+		}
+	}
+
+	// Log analysis
+	if strings.Contains(lower, "log") || strings.Contains(lower, "journal") || strings.Contains(lower, "日志") {
+		return fallbackPlan{
+			Summary:   "Analyzing system logs",
+			RiskLevel: "low",
+			Commands: []sqlite.FallbackCommand{
+				{Command: "journalctl --disk-usage", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+				{Command: "du -sh /var/log/* 2>/dev/null | sort -rh | head -10", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+				{Command: "journalctl -n 20 --no-pager 2>/dev/null", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			},
+		}
+	}
+
+	// Package update check
+	if strings.Contains(lower, "update") || strings.Contains(lower, "upgrade") || strings.Contains(lower, "güncelle") || strings.Contains(lower, "paket") {
+		return fallbackPlan{
+			Summary:   "Checking available updates",
+			RiskLevel: "medium",
+			Commands: []sqlite.FallbackCommand{
+				{Command: "apt list --upgradable 2>/dev/null || yum list updates 2>/dev/null || echo 'No package manager available'", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			},
+		}
+	}
+
+	// Default: general system info
 	return fallbackPlan{
 		Summary:   "System information",
 		RiskLevel: "low",
 		Commands: []sqlite.FallbackCommand{
 			{Command: "uptime", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
 			{Command: "free -m", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			{Command: "df -h", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
+			{Command: "ss -tulpn 2>/dev/null | wc -l", CommandType: "read", RiskLevel: "low", RequiresApproval: false},
 		},
 	}
-}
-
-func contains(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
