@@ -1,0 +1,13 @@
+server:
+  bind_address: "127.0.0.1"
+  port: 8787
+
+database:
+  path: "/tmp/opsagent.db"
+
+app:
+  name: "opsagent"
+  environment: "development"
+
+monitoring:
+  interval_seconds: 30

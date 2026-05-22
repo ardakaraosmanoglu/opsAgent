@@ -1,0 +1,25 @@
+/.omc
+.DS_Store
+
+# Binaries
+opsagent
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# node_modules (React dashboard)
+web/dashboard/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
