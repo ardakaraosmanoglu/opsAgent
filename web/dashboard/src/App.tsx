@@ -8,6 +8,8 @@ import AssistantPage from './pages/AssistantPage'
 import AuditLogPage from './pages/AuditLogPage'
 import SettingsPage from './pages/SettingsPage'
 
+const TOKEN_KEY = 'opsagent_access_token'
+
 function App() {
   const [loading, setLoading] = useState(true)
   const [setupRequired, setSetupRequired] = useState(true)
@@ -15,6 +17,11 @@ function App() {
 
   useEffect(() => {
     checkSetup()
+    // Check if token exists on mount
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (token) {
+      setAuthenticated(true)
+    }
   }, [])
 
   async function checkSetup() {
