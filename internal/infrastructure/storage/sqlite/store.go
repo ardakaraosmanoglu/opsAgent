@@ -402,6 +402,19 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (*domain
     return &u, nil
 }
 
+func (s *Store) GetUserByID(ctx context.Context, id int64) (*domain.User, error) {
+    row := s.DB.QueryRowContext(ctx, `SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = ?`, id)
+    var u domain.User
+    err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+    if errors.Is(err, sql.ErrNoRows) {
+        return nil, nil
+    }
+    if err != nil {
+        return nil, err
+    }
+    return &u, nil
+}
+
 func (s *Store) CreateUser(ctx context.Context, username, passwordHash, role string) error {
     _, err := s.DB.ExecContext(ctx, `
         INSERT INTO users (username, password_hash, role, created_at, updated_at)

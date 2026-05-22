@@ -10,7 +10,7 @@ import SettingsPage from './pages/SettingsPage'
 
 function App() {
   const [loading, setLoading] = useState(true)
-  const [setupRequired, setSetupRequired] = useState(false)
+  const [setupRequired, setSetupRequired] = useState(true)
   const [authenticated, setAuthenticated] = useState(false)
 
   useEffect(() => {
@@ -29,14 +29,26 @@ function App() {
     }
   }
 
+  // Re-check setup status (called after setup completes)
+  function refreshAuth() {
+    checkSetup()
+    setAuthenticated(false)
+  }
+
   if (loading) return <div style={{padding:48, textAlign:'center'}}>Loading...</div>
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/setup" element={setupRequired ? <SetupPage /> : <Navigate to="/login" />} />
-        <Route path="/login" element={<LoginPage onLogin={() => setAuthenticated(true)} />} />
-        <Route path="/" element={authenticated ? <DashboardPage /> : <Navigate to="/login" />}>
+        <Route path="/setup" element={
+          setupRequired ? <SetupPage onSetupDone={refreshAuth} /> : <Navigate to="/login" />
+        } />
+        <Route path="/login" element={authenticated ? <Navigate to="/" /> : <LoginPage onLogin={() => setAuthenticated(true)} />} />
+        <Route path="/" element={
+          !authenticated ? <Navigate to="/login" /> :
+          setupRequired ? <Navigate to="/setup" /> :
+          <DashboardPage />
+        }>
           <Route index element={<Navigate to="/dashboard" />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="alerts" element={<AlertsPage />} />

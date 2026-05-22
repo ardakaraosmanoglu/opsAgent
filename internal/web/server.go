@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opsagent/opsagent/internal/infrastructure/auth"
 	"github.com/opsagent/opsagent/internal/config"
 	"github.com/opsagent/opsagent/internal/infrastructure/executor"
 	"github.com/opsagent/opsagent/internal/ui"
@@ -22,37 +23,48 @@ import (
 func NewRouter(cfg *config.Config, store *sqlite.Store) http.Handler {
 	mux := http.NewServeMux()
 
+	// Create JWT authenticator
+	jwtAuth, err := auth.NewJWTAuth(cfg, store)
+	if err != nil {
+		panic("failed to create JWT auth: " + err.Error())
+	}
+
 	mux.HandleFunc("/api/system/service-status", methodGuard("GET", handleServiceStatus(cfg)))
 	mux.HandleFunc("/health", methodGuard("GET", handleHealth()))
 	mux.HandleFunc("/", handleRoot())
+	mux.HandleFunc("/assets/", handleAssets())
 
-	// Auth routes
+	// Auth routes (JWT) - no middleware needed
 	mux.HandleFunc("/api/setup/required", methodGuard("GET", handleSetupRequired(store)))
 	mux.HandleFunc("/api/setup/admin", methodGuard("POST", handleCreateAdmin(store)))
-	mux.HandleFunc("/api/auth/login", methodGuard("POST", handleLogin(store, cfg)))
-	mux.HandleFunc("/api/auth/logout", methodGuard("POST", handleLogout(store)))
-	mux.HandleFunc("/api/auth/me", methodGuard("GET", authMiddleware(store, handleMe(store))))
+	mux.HandleFunc("/api/auth/login", jwtAuth.LoginHandler())
+	mux.HandleFunc("/api/auth/logout", jwtAuth.LogoutHandler())
+	mux.HandleFunc("/api/auth/me", jwtAuth.MeHandler())
+	mux.HandleFunc("/api/auth/refresh", jwtAuth.RefreshHandler())
+
+	// Protected routes with JWT middleware
+	jwtMw := jwtAuth.Middleware()
 
 	// Alert routes
-	mux.HandleFunc("/api/alerts", methodGuard("GET", authMiddleware(store, handleGetAlerts(store))))
-	mux.HandleFunc("/api/alerts/", authMiddleware(store, handleAlertByID(store)))
+	mux.Handle("/api/alerts", jwtMw(methodGuard("GET", handleGetAlerts(store))))
+	mux.Handle("/api/alerts/", jwtMw(handleAlertByID(store)))
 
 	// Dashboard
-	mux.HandleFunc("/api/dashboard/summary", methodGuard("GET", authMiddleware(store, handleDashboardSummary(store))))
+	mux.Handle("/api/dashboard/summary", jwtMw(methodGuard("GET", handleDashboardSummary(store))))
 
 	// Assistant and task routes
-	mux.HandleFunc("/api/assistant/message", methodGuard("POST", authMiddleware(store, handleAssistantMessage(cfg, store))))
-	mux.HandleFunc("/api/tasks", methodGuard("GET", authMiddleware(store, handleGetTasks(store))))
-	mux.HandleFunc("/api/tasks/", authMiddleware(store, handleTasksByID(cfg, store)))
+	mux.Handle("/api/assistant/message", jwtMw(methodGuard("POST", handleAssistantMessage(cfg, store))))
+	mux.Handle("/api/tasks", jwtMw(methodGuard("GET", handleGetTasks(store))))
+	mux.Handle("/api/tasks/", jwtMw(handleTasksByID(cfg, store)))
 
 	// Settings and system routes
-	mux.HandleFunc("/api/settings", methodGuard("GET", authMiddleware(store, handleGetSettings(store, cfg))))
-	mux.HandleFunc("/api/settings/ai", methodGuard("POST", authMiddleware(store, handleUpdateAISettings(store, cfg))))
-	mux.HandleFunc("/api/settings/password", methodGuard("POST", authMiddleware(store, handleUpdatePassword(store))))
-	mux.HandleFunc("/api/settings/access-mode", methodGuard("PATCH", authMiddleware(store, handleUpdateAccessMode(store, cfg))))
-	mux.HandleFunc("/api/system/info", methodGuard("GET", authMiddleware(store, handleSystemInfo(store))))
-	mux.HandleFunc("/api/system/update-check", methodGuard("GET", authMiddleware(store, handleUpdateCheck(store))))
-	mux.HandleFunc("/api/system/update", methodGuard("POST", authMiddleware(store, handleUpdateAgent(store))))
+	mux.Handle("/api/settings", jwtMw(methodGuard("GET", handleGetSettings(store, cfg))))
+	mux.Handle("/api/settings/ai", jwtMw(methodGuard("POST", handleUpdateAISettings(store, cfg))))
+	mux.Handle("/api/settings/password", jwtMw(methodGuard("POST", handleUpdatePassword(store))))
+	mux.Handle("/api/settings/access-mode", jwtMw(methodGuard("PATCH", handleUpdateAccessMode(store, cfg))))
+	mux.Handle("/api/system/info", jwtMw(methodGuard("GET", handleSystemInfo(store))))
+	mux.Handle("/api/system/update-check", jwtMw(methodGuard("GET", handleUpdateCheck(store))))
+	mux.Handle("/api/system/update", jwtMw(methodGuard("POST", handleUpdateAgent(store))))
 
 	return withSecurityHeaders(mux)
 }
@@ -118,6 +130,43 @@ func handleRoot() http.HandlerFunc {
 			return
 		}
 		http.NotFound(w, r)
+	}
+}
+
+func handleAssets() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/assets/")
+		if path == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		content, err := ui.Files.ReadFile("dist/assets/" + path)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Set content type based on file extension
+		contentType := "application/octet-stream"
+		if strings.HasSuffix(path, ".js") {
+			contentType = "application/javascript"
+		} else if strings.HasSuffix(path, ".css") {
+			contentType = "text/css"
+		} else if strings.HasSuffix(path, ".html") {
+			contentType = "text/html"
+		} else if strings.HasSuffix(path, ".svg") {
+			contentType = "image/svg+xml"
+		} else if strings.HasSuffix(path, ".png") {
+			contentType = "image/png"
+		} else if strings.HasSuffix(path, ".jpg") || strings.HasSuffix(path, ".jpeg") {
+			contentType = "image/jpeg"
+		} else if strings.HasSuffix(path, ".woff2") {
+			contentType = "font/woff2"
+		}
+
+		w.Header().Set("Content-Type", contentType)
+		w.Write(content)
 	}
 }
 

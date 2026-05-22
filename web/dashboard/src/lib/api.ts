@@ -1,16 +1,72 @@
 const BASE = '/api'
 
+const TOKEN_KEY = 'opsagent_access_token'
+const REFRESH_KEY = 'opsagent_refresh_token'
+
+function getAccessToken() {
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+function getRefreshToken() {
+  return localStorage.getItem(REFRESH_KEY)
+}
+
+function setTokens(access: string, refresh: string) {
+  localStorage.setItem(TOKEN_KEY, access)
+  localStorage.setItem(REFRESH_KEY, refresh)
+}
+
+function clearTokens() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(REFRESH_KEY)
+}
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refresh = getRefreshToken()
+  if (!refresh) return false
+
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refresh }),
+    })
+    if (!res.ok) return false
+
+    const data = await res.json()
+    if (data.access_token) {
+      setTokens(data.access_token, data.refresh_token || refresh)
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('opsagent_token')
-  const headers: Record<string,string> = {
+  const token = getAccessToken()
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string,string> || {}),
+    ...(options.headers as Record<string, string> || {}),
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers })
+  let res = await fetch(`${BASE}${path}`, { ...options, headers })
+
+  // If 401, try to refresh token
   if (res.status === 401) {
-    localStorage.removeItem('opsagent_token')
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      // Retry with new token
+      const newToken = getAccessToken()
+      headers['Authorization'] = `Bearer ${newToken}`
+      res = await fetch(`${BASE}${path}`, { ...options, headers })
+    }
+  }
+
+  if (res.status === 401) {
+    clearTokens()
     window.location.href = '/login'
     throw new Error('unauthorized')
   }
@@ -26,10 +82,24 @@ export const api = {
   getSetupRequired: () => request<{required:boolean}>('/setup/required'),
   createAdmin: (username: string, password: string) =>
     request<{success:boolean}>('/setup/admin', { method: 'POST', body: JSON.stringify({ username, password }) }),
+
   login: (username: string, password: string) =>
-    request<{token:string;user:{username:string;role:string}}>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
-  logout: () => request('/auth/logout', { method: 'POST' }),
-  getMe: () => request<{username:string;role:string}>('/auth/me'),
+    request<{access_token:string;refresh_token:string;user:{id:string;username:string;email:string;name:string}}>(
+      '/auth/login',
+      { method: 'POST', body: JSON.stringify({ username, password }) }
+    ).then(data => {
+      if (data.access_token) {
+        setTokens(data.access_token, data.refresh_token || '')
+      }
+      return data
+    }),
+
+  logout: () => {
+    clearTokens()
+    return request('/auth/logout', { method: 'POST' })
+  },
+
+  getMe: () => request<{id:string;username:string;email:string;name:string}>('/auth/me'),
 
   // Dashboard
   getDashboardSummary: () => request<any>('/dashboard/summary'),

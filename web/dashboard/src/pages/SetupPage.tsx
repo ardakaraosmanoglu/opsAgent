@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 
-export default function SetupPage() {
+interface Props {
+  onSetupDone: () => void
+}
+
+export default function SetupPage({ onSetupDone }: Props) {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -28,6 +32,7 @@ export default function SetupPage() {
     setLoading(true)
     try {
       await api.createAdmin(username, password)
+      onSetupDone()
       navigate('/login')
     } catch (err: any) {
       setError(err.message || 'Setup failed')

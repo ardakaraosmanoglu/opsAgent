@@ -19,8 +19,7 @@ export default function LoginPage({ onLogin }: Props) {
     }
     setLoading(true)
     try {
-      const data = await api.login(username, password)
-      localStorage.setItem('opsagent_token', data.token)
+      await api.login(username, password)
       onLogin()
       navigate('/dashboard')
     } catch (err: any) {
