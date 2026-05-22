@@ -7,7 +7,7 @@ Local-first Linux AI ops agent. Tek kurulum komutuyla sunucuya kurulur, kendi SQ
 ## Tek Kurulum
 
 ```bash
-curl -fsSL https://opsagent.dev/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ardakaraosmanoglu/opsAgent/main/scripts/install.sh | sudo bash
 ```
 
 Kurulum sonrası systemd servisi aktif olur. Dashboard: `http://127.0.0.1:8787`
@@ -77,7 +77,7 @@ sudo /tmp/opsagent serve --config /etc/opsagent/config.yaml
 ## Kaldırma
 
 ```bash
-curl -fsSL https://opsagent.dev/uninstall.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ardakaraosmanoglu/opsAgent/main/scripts/uninstall.sh | sudo bash
 ```
 
 ## Yapı
