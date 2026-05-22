@@ -1,61 +1,118 @@
 # OpsAgent
 
-Local-first Linux AI ops agent. Single-binary, SQLite backend, web dashboard.
+Local-first Linux AI ops agent. Tek kurulum komutuyla sunucuya kurulur, kendi SQLite veritabanını kullanır, web paneline sahiptir.
 
-## Prerequisites
+**Güvenlik ilkesi:** Read-only varsayılan. Sistem değişikliği gerektiren her işlem açık onay gerektirir.
 
-- Go 1.25+
-- Linux (x86_64)
-- SQLite3 (usually pre-installed)
-
-## Build
+## Tek Kurulum
 
 ```bash
+curl -fsSL https://opsagent.dev/install.sh | sudo bash
+```
+
+Kurulum sonrası systemd servisi aktif olur. Dashboard: `http://127.0.0.1:8787`
+
+## Uzak Erişim
+
+Dashboard localhost'ta çalışır. Uzaktan erişim için SSH tunnel:
+
+```bash
+ssh -L 8787:localhost:8787 root@SUNUCU_IP
+```
+
+Tarayıcıda: `http://localhost:8787`
+
+## Kurulum Adımları
+
+```
+1. Root yetkisi kontrolü
+2. OS/architecture tespiti (Linux x86_64 veya arm64)
+3. Binary indirme veya yerel build kullanımı
+4. /usr/local/bin/opsagent kurulumu
+5. /etc/opsagent dizini oluşturma
+6. config.yaml oluşturma
+7. /var/lib/opsagent dizini (SQLite veritabanı)
+8. /var/log/opsagent dizini (loglar)
+9. systemd service dosyası oluşturma
+10. Servis başlatma ve enable etme
+```
+
+Kurulum başarılı olursa:
+
+```
+OpsAgent installed successfully.
+
+Service:
+active
+
+Dashboard:
+http://127.0.0.1:8787
+
+Your server data stays on this machine.
+No write operation will run without approval.
+```
+
+## Manuel Build
+
+```bash
+# UI build
+cd web/dashboard && npm install && npm run build && cd ../..
+
+# Go binary build
 go build -o opsagent ./cmd/opsagent
 ```
 
-## Run
+## Manuel Kurulum (SSH ile erişim yoksa)
 
 ```bash
-./opsagent
+# Binary'yi sunucuya kopyala
+scp opsagent root@SUNUCU_IP:/tmp/
+
+# Sunucuda çalıştır
+ssh root@SUNUCU_IP
+chmod +x /tmp/opsagent
+sudo /tmp/opsagent serve --config /etc/opsagent/config.yaml
 ```
 
-Agent starts on `0.0.0.0:8080` by default. Dashboard at `http://localhost:8080`.
-
-## Install as Systemd Service
+## Kaldırma
 
 ```bash
-sudo cp opsagent /usr/local/bin/
-sudo cp scripts/install.sh /usr/local/bin/opsagent-install
-sudo opsagent-install
+curl -fsSL https://opsagent.dev/uninstall.sh | sudo bash
 ```
 
-## Configuration
+## Yapı
 
-Edit `config.yaml` before running:
-
-```yaml
-server:
-  host: "0.0.0.0"
-  port: 8080
-
-database:
-  path: "./opsagent.db"
-
-ai:
-  # Optional: set API key via environment variable
-  # OPENAI_API_KEY=sk-... ./opsagent
+```
+/usr/local/bin/opsagent          # Ana binary
+/etc/opsagent/config.yaml       # Config dosyası
+/var/lib/opsagent/opsagent.db    # SQLite veritabanı
+/var/log/opsagent/opsagent.log  # Log dosyası
+/etc/systemd/system/opsagent.service
 ```
 
-## First Setup
+## İlk Kullanım
 
-1. Open dashboard at `http://localhost:8080`
-2. Create admin account
-3. Optionally configure AI API key for AI-assisted analysis
-4. Agent begins monitoring automatically
+1. Dashboard'u aç: `http://127.0.0.1:8787`
+2. İlk açılışta setup wizard çalışır
+3. Admin hesabı oluştur
+4. AI provider istersen API key gir (opsiyonel)
+5. Agent otomatik metrik toplamaya başlar
 
-## Uninstall
+## Özellikler
 
-```bash
-sudo scripts/uninstall.sh
-```
+- **Monitoring:** CPU, RAM, disk, load average, processler, portlar, servisler
+- **Alerting:** Disk/RAM/CPU threshold bazlı uyarılar
+- **Assistant:** Doğal dilde sistem sorgulama
+- **Plan + Approval:** Sistem değişikliği gerektiren işlemlerde onay akışı
+- **Audit Log:** Tüm işlemlerin kaydı
+
+## AI Olmadan Kullanım
+
+AI provider yapılandırılmamışsa agent template bazlı planlar üretir. Disk sorguları `df -h`/`du` komutlarıyla, diğer sorgular `uptime`/`free -m` ile yanıtlanır.
+
+## Güvenlik
+
+- Dashboard varsayılan olarak sadece 127.0.0.1'de çalışır
+- Write komutlar onaysız çalışmaz
+- Blocked komutlar (rm -rf /, mkfs, vb.) asla çalıştırılamaz
+- Tüm işlemler audit log'da kayıtlı
