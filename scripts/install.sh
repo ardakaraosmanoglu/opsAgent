@@ -39,7 +39,7 @@ mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
 
 if [[ -n "$BINARY_URL_BASE" ]]; then
     echo "[2/9] Downloading OpsAgent binary..."
-    curl -fsSL "$BINARY_URL_BASE/opsagent-linux-$ARCH" -o "$INSTALL_DIR/$APP_NAME"
+    curl -fsSL -L "$BINARY_URL_BASE/opsagent-linux-$ARCH" -o "$INSTALL_DIR/$APP_NAME"
 else
     echo "[2/9] Installing OpsAgent from local build..."
     if [[ ! -f "./opsagent" ]]; then
