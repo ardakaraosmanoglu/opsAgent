@@ -887,12 +887,25 @@ func handleUpdateAISettings(store *sqlite.Store, cfg *config.Config) http.Handle
 		}
 
 		// Store AI settings in database AND update in-memory config
-		_ = store.SetSetting(r.Context(), "ai_provider", req.Provider)
-		_ = store.SetSetting(r.Context(), "ai_model", req.Model)
-		_ = store.SetSetting(r.Context(), "ai_enabled", strconv.FormatBool(req.Enabled))
+		ctx := r.Context()
+		if err := store.SetSetting(ctx, "ai_provider", req.Provider); err != nil {
+			http.Error(w, "failed to save provider: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := store.SetSetting(ctx, "ai_model", req.Model); err != nil {
+			http.Error(w, "failed to save model: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := store.SetSetting(ctx, "ai_enabled", strconv.FormatBool(req.Enabled)); err != nil {
+			http.Error(w, "failed to save enabled: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 		// Only update API key if provided (don't clear existing key)
 		if req.APIKey != "" {
-			_ = store.SetSetting(r.Context(), "ai_api_key", req.APIKey)
+			if err := store.SetSetting(ctx, "ai_api_key", req.APIKey); err != nil {
+				http.Error(w, "failed to save api_key: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
 			cfg.AI.APIKey = req.APIKey
 		}
 		cfg.AI.Provider = req.Provider
