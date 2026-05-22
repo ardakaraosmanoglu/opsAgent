@@ -34,16 +34,16 @@ export default function AlertsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Alerts</h1>
-        <p className="text-sm text-muted-foreground mt-1">{alerts.length} total alerts</p>
+        <h1 className="text-xl font-semibold tracking-tight">Alerts</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">{alerts.length} total alerts</p>
       </div>
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-        <TabsList>
+        <TabsList className="h-8">
           {(['all', 'open', 'acknowledged', 'resolved', 'ignored'] as Filter[]).map(f => (
-            <TabsTrigger key={f} value={f} className="capitalize text-xs">
+            <TabsTrigger key={f} value={f} className="text-xs capitalize h-7 px-2.5">
               {f}
             </TabsTrigger>
           ))}
@@ -51,42 +51,42 @@ export default function AlertsPage() {
       </Tabs>
 
       {loading ? (
-        <div className="py-12 text-center text-muted-foreground">Loading...</div>
+        <div className="py-12 text-center text-muted-foreground text-xs">Loading...</div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
+        <Card className="border-border/60">
+          <CardContent className="py-12 text-center text-muted-foreground text-xs">
             No alerts
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {filtered.map(alert => (
-            <Card key={alert.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="mt-0.5 shrink-0">
+            <Card key={alert.id} className="border-border/60 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="shrink-0">
                     <AlertBadge severity={alert.severity} status={alert.status} />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{alert.type}: {alert.message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium truncate">{alert.type}: {alert.message}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {new Date(alert.created_at).toLocaleString()}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {alert.status === 'open' && (
-                    <Button size="sm" variant="outline" onClick={() => handleAction(alert.id, 'acknowledge')}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleAction(alert.id, 'acknowledge')}>
                       Ack
                     </Button>
                   )}
                   {alert.status !== 'resolved' && (
-                    <Button size="sm" onClick={() => handleAction(alert.id, 'resolve')}>
+                    <Button size="sm" className="h-7 text-xs" onClick={() => handleAction(alert.id, 'resolve')}>
                       Resolve
                     </Button>
                   )}
                   {alert.status !== 'ignored' && (
-                    <Button size="sm" variant="destructive" onClick={() => handleAction(alert.id, 'ignore')}>
+                    <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => handleAction(alert.id, 'ignore')}>
                       Ignore
                     </Button>
                   )}

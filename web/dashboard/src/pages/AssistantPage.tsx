@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ApprovalBox } from '@/components/ApprovalBox'
+import { Send } from 'lucide-react'
 import { api } from '@/lib/api'
 
 interface Message {
@@ -71,26 +72,26 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-fade-in">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold tracking-tight">Assistant</h1>
-        <p className="text-sm text-muted-foreground mt-1">AI-powered system assistant</p>
+        <h1 className="text-xl font-semibold tracking-tight">Assistant</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">AI-powered system assistant</p>
       </div>
 
-      <Card className="flex-1 flex flex-col min-h-0">
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-          <div className="space-y-4">
+      <Card className="flex-1 flex flex-col min-h-0 border-border/60">
+        <ScrollArea ref={scrollRef} className="flex-1">
+          <div className="p-4 space-y-4">
             {messages.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground text-sm">
+              <div className="text-center py-12 text-muted-foreground text-xs">
                 Ask me anything about your system...
               </div>
             )}
             {messages.map((msg, i) => (
-              <div key={i} className="space-y-2">
-                <div className={`text-xs font-medium ${msg.role === 'user' ? 'text-primary' : 'text-emerald-400'}`}>
+              <div key={i} className="space-y-1.5">
+                <div className={`text-xs font-semibold ${msg.role === 'user' ? 'text-primary' : 'text-emerald-400'}`}>
                   {msg.role === 'user' ? 'You' : 'OpsAgent'}
                 </div>
-                <div className="text-sm pl-3 border-l-2 border-border">{msg.content}</div>
+                <div className="text-xs pl-3 border-l border-border/50 leading-relaxed">{msg.content}</div>
                 {msg.type === 'plan' && msg.tid && (
                   <ApprovalBox
                     title="Proposed Plan"
@@ -103,7 +104,7 @@ export default function AssistantPage() {
               </div>
             ))}
             {loading && (
-              <div className="text-center py-8 text-muted-foreground text-sm animate-pulse">
+              <div className="text-center py-8 text-muted-foreground text-xs animate-pulse">
                 Thinking...
               </div>
             )}
@@ -111,13 +112,13 @@ export default function AssistantPage() {
           </div>
         </ScrollArea>
 
-        <CardContent className="p-4 border-t">
+        <CardContent className="p-3 border-t border-border/60">
           <form onSubmit={handleSend} className="flex gap-2">
             <Textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Ask me anything..."
-              className="min-h-9 max-h-32 resize-none"
+              className="min-h-[36px] max-h-28 resize-none text-xs"
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
@@ -125,8 +126,13 @@ export default function AssistantPage() {
                 }
               }}
             />
-            <Button type="submit" size="sm" disabled={loading || !input.trim()} className="shrink-0">
-              Send
+            <Button
+              type="submit"
+              size="icon"
+              disabled={loading || !input.trim()}
+              className="h-[36px] w-[36px] shrink-0"
+            >
+              <Send className="h-3.5 w-3.5" />
             </Button>
           </form>
         </CardContent>
