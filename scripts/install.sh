@@ -7,7 +7,7 @@ CONFIG_DIR="/etc/opsagent"
 DATA_DIR="/var/lib/opsagent"
 LOG_DIR="/var/log/opsagent"
 SERVICE_FILE="/etc/systemd/system/opsagent.service"
-BINARY_URL_BASE="${OPSAGENT_URL:-}"
+BINARY_URL_BASE="${OPSAGENT_URL:-https://github.com/ardakaraosmanoglu/opsAgent/releases/latest/download}"
 
 if [[ "$EUID" -ne 0 ]]; then
     echo "Please run as root or with sudo."
