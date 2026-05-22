@@ -10,17 +10,17 @@ Local-first Linux AI ops agent. Tek kurulum komutuyla sunucuya kurulur, kendi SQ
 curl -fsSL https://raw.githubusercontent.com/ardakaraosmanoglu/opsAgent/main/scripts/install.sh | sudo bash
 ```
 
-Kurulum sonrası systemd servisi aktif olur. Dashboard: `http://127.0.0.1:8787`
+Kurulum sonrası systemd servisi aktif olur. Dashboard: `http://SUNUCU_IP:8787`
 
-## Uzak Erişim
+## Güncelleme
 
-Dashboard localhost'ta çalışır. Uzaktan erişim için SSH tunnel:
+Aynı komutu tekrar çalıştır:
 
 ```bash
-ssh -L 8787:localhost:8787 root@SUNUCU_IP
+curl -fsSL https://raw.githubusercontent.com/ardakaraosmanoglu/opsAgent/main/scripts/install.sh | sudo bash
 ```
 
-Tarayıcıda: `http://localhost:8787`
+Mevcut kurulum tespit edilir ve sadece binary güncellenir, veriler korunur.
 
 ## Kurulum Adımları
 
@@ -46,32 +46,10 @@ Service:
 active
 
 Dashboard:
-http://127.0.0.1:8787
+http://SUNUCU_IP:8787
 
 Your server data stays on this machine.
 No write operation will run without approval.
-```
-
-## Manuel Build
-
-```bash
-# UI build
-cd web/dashboard && npm install && npm run build && cd ../..
-
-# Go binary build
-go build -o opsagent ./cmd/opsagent
-```
-
-## Manuel Kurulum (SSH ile erişim yoksa)
-
-```bash
-# Binary'yi sunucuya kopyala
-scp opsagent root@SUNUCU_IP:/tmp/
-
-# Sunucuda çalıştır
-ssh root@SUNUCU_IP
-chmod +x /tmp/opsagent
-sudo /tmp/opsagent serve --config /etc/opsagent/config.yaml
 ```
 
 ## Kaldırma
@@ -85,14 +63,14 @@ curl -fsSL https://raw.githubusercontent.com/ardakaraosmanoglu/opsAgent/main/scr
 ```
 /usr/local/bin/opsagent          # Ana binary
 /etc/opsagent/config.yaml       # Config dosyası
-/var/lib/opsagent/opsagent.db    # SQLite veritabanı
+/var/lib/opsagent/opsagent.db   # SQLite veritabanı
 /var/log/opsagent/opsagent.log  # Log dosyası
 /etc/systemd/system/opsagent.service
 ```
 
 ## İlk Kullanım
 
-1. Dashboard'u aç: `http://127.0.0.1:8787`
+1. Dashboard'u aç: `http://SUNUCU_IP:8787`
 2. İlk açılışta setup wizard çalışır
 3. Admin hesabı oluştur
 4. AI provider istersen API key gir (opsiyonel)
@@ -112,7 +90,7 @@ AI provider yapılandırılmamışsa agent template bazlı planlar üretir. Disk
 
 ## Güvenlik
 
-- Dashboard varsayılan olarak sadece 127.0.0.1'de çalışır
+- Dashboard varsayılan olarak tüm arayüzlerde dinler (0.0.0.0)
 - Write komutlar onaysız çalışmaz
 - Blocked komutlar (rm -rf /, mkfs, vb.) asla çalıştırılamaz
 - Tüm işlemler audit log'da kayıtlı
