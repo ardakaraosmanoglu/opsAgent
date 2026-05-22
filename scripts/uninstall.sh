@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 if [[ "$EUID" -ne 0 ]]; then
     echo "Please run as root or with sudo."
@@ -17,8 +16,14 @@ systemctl daemon-reload
 echo "Removing binary..."
 rm -f /usr/local/bin/opsagent
 
-echo ""
-read -p "Remove config, database and logs? This cannot be undone. [y/N] " confirm
+# Remove all data by default (no interactive prompt in script mode)
+if [[ -t 0 ]]; then
+    echo ""
+    read -p "Remove config, database and logs? This cannot be undone. [y/N] " confirm
+else
+    confirm="y"
+fi
+
 if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
     rm -rf /etc/opsagent
     rm -rf /var/lib/opsagent
