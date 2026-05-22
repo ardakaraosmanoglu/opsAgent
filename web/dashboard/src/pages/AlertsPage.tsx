@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
-import { AlertBadge } from '../components/AlertBadge'
-import { api } from '../lib/api'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { AlertBadge } from '@/components/AlertBadge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { api } from '@/lib/api'
 
 type Filter = 'all' | 'open' | 'acknowledged' | 'resolved' | 'ignored'
 
@@ -10,7 +13,10 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.getAlerts().then(data => setAlerts(data.alerts || [])).catch(console.error).finally(() => setLoading(false))
+    api.getAlerts()
+      .then(data => setAlerts(data.alerts || []))
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }, [])
 
   const filtered = alerts.filter(a => filter === 'all' || a.status === filter)
@@ -28,28 +34,65 @@ export default function AlertsPage() {
   }
 
   return (
-    <div className="container">
-      <h1 className="page-title">Alerts</h1>
-      <div style={{display:'flex', gap:8, marginBottom:24}}>
-        {(['all','open','acknowledged','resolved','ignored'] as Filter[]).map(f => (
-          <button key={f} className={filter === f ? 'primary' : 'secondary'} onClick={() => setFilter(f)}>{f}</button>
-        ))}
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Alerts</h1>
+        <p className="text-sm text-muted-foreground mt-1">{alerts.length} total alerts</p>
       </div>
-      {loading ? <div>Loading...</div> : filtered.length === 0 ? <div className="card">No alerts</div> : (
-        <div style={{display:'flex', flexDirection:'column', gap:8}}>
+
+      <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
+        <TabsList>
+          {(['all', 'open', 'acknowledged', 'resolved', 'ignored'] as Filter[]).map(f => (
+            <TabsTrigger key={f} value={f} className="capitalize text-xs">
+              {f}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {loading ? (
+        <div className="py-12 text-center text-muted-foreground">Loading...</div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No alerts
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
           {filtered.map(alert => (
-            <div key={alert.id} className="card" style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-              <div>
-                <AlertBadge severity={alert.severity} status={alert.status} />
-                <span style={{marginLeft:12}}>{alert.type}: {alert.message}</span>
-                <div style={{fontSize:12, color:'#64748b', marginTop:4}}>{new Date(alert.created_at).toLocaleString()}</div>
+            <Card key={alert.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="mt-0.5 shrink-0">
+                    <AlertBadge severity={alert.severity} status={alert.status} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{alert.type}: {alert.message}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(alert.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {alert.status === 'open' && (
+                    <Button size="sm" variant="outline" onClick={() => handleAction(alert.id, 'acknowledge')}>
+                      Ack
+                    </Button>
+                  )}
+                  {alert.status !== 'resolved' && (
+                    <Button size="sm" onClick={() => handleAction(alert.id, 'resolve')}>
+                      Resolve
+                    </Button>
+                  )}
+                  {alert.status !== 'ignored' && (
+                    <Button size="sm" variant="destructive" onClick={() => handleAction(alert.id, 'ignore')}>
+                      Ignore
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div style={{display:'flex', gap:8}}>
-                {alert.status === 'open' && <button className="secondary" onClick={() => handleAction(alert.id, 'acknowledge')}>Ack</button>}
-                {alert.status !== 'resolved' && <button className="primary" onClick={() => handleAction(alert.id, 'resolve')}>Resolve</button>}
-                {alert.status !== 'ignored' && <button className="danger" onClick={() => handleAction(alert.id, 'ignore')}>Ignore</button>}
-              </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

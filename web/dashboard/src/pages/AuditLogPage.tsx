@@ -1,39 +1,60 @@
 import { useState, useEffect } from 'react'
-import { api } from '../lib/api'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { api } from '@/lib/api'
 
 export default function AuditLogPage() {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.getTasks().then(data => setTasks(data.tasks || [])).catch(console.error).finally(() => setLoading(false))
+    api.getTasks()
+      .then(data => setTasks(data.tasks || []))
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }, [])
 
   return (
-    <div className="container">
-      <h1 className="page-title">Audit Log</h1>
-      {loading ? <div>Loading...</div> : tasks.length === 0 ? <div className="card">No audit events</div> : (
-        <table style={{width:'100%', borderCollapse:'collapse'}}>
-          <thead>
-            <tr style={{textAlign:'left', color:'#94a3b8', fontSize:12}}>
-              <th style={{padding:'8px 12px'}}>Timestamp</th>
-              <th style={{padding:'8px 12px'}}>Event</th>
-              <th style={{padding:'8px 12px'}}>Actor</th>
-              <th style={{padding:'8px 12px'}}>Message</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map(task => (
-              <tr key={task.id} style={{borderTop:'1px solid #334155'}}>
-                <td style={{padding:'12px'}}>{new Date(task.created_at || Date.now()).toLocaleString()}</td>
-                <td style={{padding:'12px'}}><span className="badge info">{task.status}</span></td>
-                <td style={{padding:'12px'}}>{task.actor || 'system'}</td>
-                <td style={{padding:'12px'}}>{task.description || task.type || 'Task'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Audit Log</h1>
+        <p className="text-sm text-muted-foreground mt-1">{tasks.length} events recorded</p>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Task History</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="py-12 text-center text-muted-foreground">Loading...</div>
+          ) : tasks.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground text-sm">No audit events</div>
+          ) : (
+            <ScrollArea className="h-[60vh]">
+              <div className="divide-y divide-border">
+                {tasks.map(task => (
+                  <div key={task.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50 transition-colors">
+                    <div className="text-xs text-muted-foreground w-36 shrink-0">
+                      {new Date(task.created_at || Date.now()).toLocaleString()}
+                    </div>
+                    <div className="w-28 shrink-0">
+                      <Badge variant="outline" className="text-xs capitalize">{task.status}</Badge>
+                    </div>
+                    <div className="w-24 shrink-0 text-xs text-muted-foreground">
+                      {task.actor || 'system'}
+                    </div>
+                    <div className="text-sm truncate">
+                      {task.description || task.type || 'Task'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

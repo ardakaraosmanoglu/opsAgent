@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { api } from '@/lib/api'
 
 interface Props { onLogin: () => void }
 export default function LoginPage({ onLogin }: Props) {
@@ -30,22 +35,47 @@ export default function LoginPage({ onLogin }: Props) {
   }
 
   return (
-    <div className="container" style={{maxWidth:480, marginTop:80}}>
-      <h1 className="page-title">Sign In</h1>
-      <form onSubmit={handleSubmit} className="card">
-        <div style={{marginBottom:16}}>
-          <label style={{display:'block', marginBottom:4, fontSize:14}}>Username</label>
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="admin" />
-        </div>
-        <div style={{marginBottom:16}}>
-          <label style={{display:'block', marginBottom:4, fontSize:14}}>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
-        </div>
-        {error && <div style={{color:'#f87171', marginBottom:16}}>{error}</div>}
-        <button type="submit" className="primary" disabled={loading} style={{width:'100%'}}>
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
-      </form>
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-xl">Sign in</CardTitle>
+          <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="admin"
+                autoComplete="username"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
+            </div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign In'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }

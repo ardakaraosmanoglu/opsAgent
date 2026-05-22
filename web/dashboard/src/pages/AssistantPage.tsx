@@ -1,9 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { ApprovalBox } from '../components/ApprovalBox'
-import { api } from '../lib/api'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { ApprovalBox } from '@/components/ApprovalBox'
+import { api } from '@/lib/api'
 
-interface Message { role: 'user' | 'assistant'; content: string; type?: string; tid?: string; summary?: string; commands?: any[] }
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  type?: string
+  tid?: string
+  summary?: string
+  commands?: any[]
+}
 
 export default function AssistantPage() {
   const location = useLocation()
@@ -11,6 +22,7 @@ export default function AssistantPage() {
   const [input, setInput] = useState(location.state?.prompt || '')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -59,33 +71,66 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="container" style={{display:'flex', flexDirection:'column', height:'calc(100vh - 48px)'}}>
-      <h1 className="page-title">Assistant</h1>
-      <div style={{flex:1, overflow:'auto', marginBottom:16}}>
-        {messages.map((msg, i) => (
-          <div key={i} style={{marginBottom:16}}>
-            <div style={{fontWeight:600, color: msg.role === 'user' ? '#60a5fa' : '#86efac'}}>
-              {msg.role === 'user' ? 'You' : 'OpsAgent'}
-            </div>
-            <div style={{marginTop:4, whiteSpace:'pre-wrap'}}>{msg.content}</div>
-            {msg.type === 'plan' && msg.tid && (
-              <ApprovalBox
-                title="Proposed Plan"
-                summary={msg.summary || ''}
-                commands={msg.commands || []}
-                onApprove={() => handleApprove(msg.tid!)}
-                onReject={() => handleReject(msg.tid!)}
-              />
-            )}
-          </div>
-        ))}
-        {loading && <div style={{color:'#64748b'}}>Thinking...</div>}
-        <div ref={bottomRef} />
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold tracking-tight">Assistant</h1>
+        <p className="text-sm text-muted-foreground mt-1">AI-powered system assistant</p>
       </div>
-      <form onSubmit={handleSend} style={{display:'flex', gap:8}}>
-        <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask me anything..." style={{flex:1}} />
-        <button type="submit" className="primary" disabled={loading || !input.trim()}>Send</button>
-      </form>
+
+      <Card className="flex-1 flex flex-col min-h-0">
+        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+          <div className="space-y-4">
+            {messages.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                Ask me anything about your system...
+              </div>
+            )}
+            {messages.map((msg, i) => (
+              <div key={i} className="space-y-2">
+                <div className={`text-xs font-medium ${msg.role === 'user' ? 'text-primary' : 'text-emerald-400'}`}>
+                  {msg.role === 'user' ? 'You' : 'OpsAgent'}
+                </div>
+                <div className="text-sm pl-3 border-l-2 border-border">{msg.content}</div>
+                {msg.type === 'plan' && msg.tid && (
+                  <ApprovalBox
+                    title="Proposed Plan"
+                    summary={msg.summary || ''}
+                    commands={msg.commands || []}
+                    onApprove={() => handleApprove(msg.tid!)}
+                    onReject={() => handleReject(msg.tid!)}
+                  />
+                )}
+              </div>
+            ))}
+            {loading && (
+              <div className="text-center py-8 text-muted-foreground text-sm animate-pulse">
+                Thinking...
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </ScrollArea>
+
+        <CardContent className="p-4 border-t">
+          <form onSubmit={handleSend} className="flex gap-2">
+            <Textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="Ask me anything..."
+              className="min-h-9 max-h-32 resize-none"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSend(e as any)
+                }
+              }}
+            />
+            <Button type="submit" size="sm" disabled={loading || !input.trim()} className="shrink-0">
+              Send
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }

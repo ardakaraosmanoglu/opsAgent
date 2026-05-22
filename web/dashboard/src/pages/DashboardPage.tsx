@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MetricCard } from '../components/MetricCard'
-import { api } from '../lib/api'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { MetricCard } from '@/components/MetricCard'
+import { api } from '@/lib/api'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -9,27 +11,40 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.getDashboardSummary().then(setSummary).catch(console.error).finally(() => setLoading(false))
+    api.getDashboardSummary()
+      .then(setSummary)
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }, [])
 
   const quickActions = [
-    { label: 'Analyze disk', prompt: 'Analyze disk usage and suggest cleanup' },
-    { label: 'Check CPU', prompt: 'Check CPU usage and report' },
-    { label: 'Show ports', prompt: 'Show open network ports' },
-    { label: 'System info', prompt: 'Show system information' },
+    { label: 'Analyze disk', prompt: 'Analyze disk usage and suggest cleanup', icon: '💾' },
+    { label: 'Check CPU', prompt: 'Check CPU usage and report', icon: '⚡' },
+    { label: 'Show ports', prompt: 'Show open network ports', icon: '🔌' },
+    { label: 'System info', prompt: 'Show system information', icon: 'ℹ️' },
   ]
 
   function handleQuickAction(prompt: string) {
     navigate('/assistant', { state: { prompt } })
   }
 
-  if (loading) return <div className="container">Loading...</div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="container">
-      <h1 className="page-title">Dashboard</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1">System overview and quick actions</p>
+      </div>
 
-      <div className="grid" style={{marginBottom:32}}>
+      {/* Metrics Grid */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <MetricCard label="CPU" value={summary?.cpu_usage ?? '-'} unit="%" color="#60a5fa" />
         <MetricCard label="Memory" value={summary?.memory_usage ?? '-'} unit="%" color="#a78bfa" />
         <MetricCard label="Disk" value={summary?.disk_usage ?? '-'} unit="%" color="#f97316" />
@@ -39,19 +54,37 @@ export default function DashboardPage() {
         <MetricCard label="Active Alerts" value={summary?.open_alerts ?? 0} color="#f87171" />
       </div>
 
-      <div className="section">
-        <h2 className="section-title">Quick Actions</h2>
-        <div style={{display:'flex', gap:12, flexWrap:'wrap'}}>
-          {quickActions.map(a => (
-            <button key={a.label} className="secondary" onClick={() => handleQuickAction(a.prompt)}>{a.label}</button>
-          ))}
-        </div>
-      </div>
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map(a => (
+              <Button
+                key={a.label}
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickAction(a.prompt)}
+              >
+                <span className="mr-1">{a.icon}</span>
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="section">
-        <h2 className="section-title">Recent Tasks</h2>
-        <div className="card" style={{color:'#94a3b8'}}>No recent tasks</div>
-      </div>
+      {/* Recent Tasks */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Recent Tasks</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">No recent tasks</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
