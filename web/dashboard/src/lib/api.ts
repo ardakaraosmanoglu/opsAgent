@@ -62,4 +62,6 @@ export const api = {
   getSettings: () => request<any>('/settings'),
   updateAISettings: (data: {enabled:boolean;provider:string;api_key:string;model:string}) =>
     request('/settings/ai', { method: 'POST', body: JSON.stringify(data) }),
+  updatePassword: (currentPassword: string, newPassword: string) =>
+    request('/settings/password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
 }

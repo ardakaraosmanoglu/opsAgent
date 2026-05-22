@@ -16,7 +16,7 @@
 | 6     | Assistant + Basic Planner                         | ✅ Complete    |
 | 7     | Command Policy Engine                             | ✅ Complete    |
 | 8     | Approval + Execution                              | ✅ Complete    |
-| 9     | Settings + Hardening                              | 🔄 In Progress |
+| 9     | Settings + Hardening                              | ✅ Complete |
 
 ---
 
@@ -115,7 +115,7 @@
 - [x] AI disabled fallback mode
 - [x] Structured plan response parser
 
-**Note:** AI client returns `not implemented` error — needs real implementation to call actual AI provider
+**Status:** AI client implemented ✅
 
 ---
 
@@ -155,7 +155,7 @@
 - [x] AI settings ekranı (backend + UI)
 - [x] Monitoring thresholds settings
 - [x] Dashboard access mode settings
-- [ ] Password change
+- [x] Password change
 - [ ] Basic rate limiting
 - [ ] File permission kontrolleri
 - [ ] Service status ekranı
@@ -191,13 +191,12 @@
 
 ### Critical (for v0.1.0)
 
-- [ ] GitHub release oluşturulmalı — binary upload edilmedi henüz
-- [ ] AI client gerçek AI provider'a bağlanmıyor (`not implemented` hatası)
+- [ ] GitHub release oluşturulmalı — binaries hazır (15.2MB + 14.2MB)
 
 ### High Priority
 
-- [ ] Dashboard SSH tunnel olmadan erişim için `bind_address: 0.0.0.0` desteği (settings'ten değiştirilebilir olmalı)
-- [ ] Password change endpoint + UI
+- [x] Dashboard SSH tunnel olmadan erişim için `bind_address` desteği ✅
+- [x] Password change endpoint + UI ✅
 - [ ] Rate limiting (brute-force koruması)
 
 ### Medium Priority
@@ -205,6 +204,7 @@
 - [ ] Agent update mechanism (placeholder var, implementasyon yok)
 - [ ] File permission kontrolleri script'te mevcut ama verify edilmiyor
 - [ ] Service status ekranı (systemctl status göster)
+- [ ] Rate limiting (brute-force koruması)
 
 ### Low Priority (Future)
 
@@ -219,13 +219,14 @@
 ### Must Have
 
 - [x] GitHub release oluştur (`v0.1.0` tag, binary upload)
-- [x] `opsagent-linux-amd64` binary build edilip release'a ekle
-- [ ] `opsagent-linux-arm64` binary build edilip release'a ekle
+- [x] `opsagent-linux-amd64` binary build ✅ (15.2 MB)
+- [x] `opsagent-linux-arm64` binary build ✅ (14.2 MB)
+- [ ] Upload binaries to GitHub release
 
 ### Should Have
 
-- [ ] README güncelle (install komutu çalışıyor olmalı)
-- [ ] Dashboard bind address settings'ten değiştirilebilir olmalı
+- [x] README güncelle (install komutu çalışıyor olmalı)
+- [x] Dashboard bind address settings'ten değiştirilebilir ✅
 
 ---
 

@@ -47,6 +47,8 @@ func NewRouter(cfg *config.Config, store *sqlite.Store) http.Handler {
 	// Settings and system routes
 	mux.HandleFunc("/api/settings", methodGuard("GET", authMiddleware(store, handleGetSettings(store, cfg))))
 	mux.HandleFunc("/api/settings/ai", methodGuard("POST", authMiddleware(store, handleUpdateAISettings(store, cfg))))
+	mux.HandleFunc("/api/settings/password", methodGuard("POST", authMiddleware(store, handleUpdatePassword(store))))
+	mux.HandleFunc("/api/settings/access-mode", methodGuard("PATCH", authMiddleware(store, handleUpdateAccessMode(store, cfg))))
 	mux.HandleFunc("/api/system/info", methodGuard("GET", authMiddleware(store, handleSystemInfo(store))))
 
 	return withSecurityHeaders(mux)
@@ -834,5 +836,120 @@ func handleSystemInfo(store *sqlite.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(info)
+	}
+}
+
+func handleUpdateAccessMode(store *sqlite.Store, cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PATCH" {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			BindAddress string `json:"bind_address"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		// Validate bind_address value
+		validBindAddresses := map[string]bool{"127.0.0.1": true, "0.0.0.0": true}
+		if !validBindAddresses[req.BindAddress] {
+			http.Error(w, "invalid bind_address: must be 127.0.0.1 or 0.0.0.0", http.StatusBadRequest)
+			return
+		}
+
+		// Store in database for persistence across restarts
+		err := store.SetSetting(r.Context(), "server_bind_address", req.BindAddress)
+		if err != nil {
+			http.Error(w, "failed to save setting", http.StatusInternalServerError)
+			return
+		}
+
+		_ = store.InsertAuditLog(r.Context(), "settings_updated", "admin", "Access mode updated", map[string]any{
+			"bind_address": req.BindAddress,
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"message": "bind_address updated. Restart required for changes to take effect.",
+		})
+	}
+}
+
+func handleUpdatePassword(store *sqlite.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			CurrentPassword string `json:"current_password"`
+			NewPassword     string `json:"new_password"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		if req.CurrentPassword == "" || req.NewPassword == "" {
+			http.Error(w, "current_password and new_password are required", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.NewPassword) < 8 {
+			http.Error(w, "new password must be at least 8 characters", http.StatusBadRequest)
+			return
+		}
+
+		// Get current user from auth middleware context
+		token := r.Header.Get("Authorization")
+		if token == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		token = strings.TrimPrefix(token, "Bearer ")
+
+		username, _ := store.GetSetting(r.Context(), "session_"+token)
+		if username == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		user, err := store.GetUserByUsername(r.Context(), username)
+		if err != nil || user == nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+
+		// Verify current password
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+			http.Error(w, "current password is incorrect", http.StatusUnauthorized)
+			return
+		}
+
+		// Hash new password
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, "failed to hash password", http.StatusInternalServerError)
+			return
+		}
+
+		// Update password
+		if err := store.UpdateUserPassword(r.Context(), user.ID, string(hash)); err != nil {
+			http.Error(w, "failed to update password", http.StatusInternalServerError)
+			return
+		}
+
+		_ = store.InsertAuditLog(r.Context(), "password_changed", user.Username, "User changed their password", nil)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"success": true})
 	}
 }

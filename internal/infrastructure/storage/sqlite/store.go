@@ -410,6 +410,13 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash, role str
     return err
 }
 
+func (s *Store) UpdateUserPassword(ctx context.Context, userID int64, passwordHash string) error {
+    _, err := s.DB.ExecContext(ctx, `
+        UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
+        passwordHash, userID)
+    return err
+}
+
 func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
     row := s.DB.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key)
     var val string
