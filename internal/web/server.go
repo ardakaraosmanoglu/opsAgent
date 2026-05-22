@@ -499,32 +499,42 @@ func handleDashboardSummary(store *sqlite.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		metric, _ := store.GetLatestMetric(ctx)
+		metric, err := store.GetLatestMetric(ctx)
 		openAlerts, _ := store.GetOpenAlertCount(ctx)
-		topCPU, _ := store.GetTopCPUProcesses(ctx, 5)
-		topMem, _ := store.GetTopMemoryProcesses(ctx, 5)
 		ports, _ := store.GetPorts(ctx)
-		services, _ := store.GetServices(ctx)
 
 		summary := map[string]any{
 			"open_alerts":  openAlerts,
-			"cpu_usage":    0,
-			"memory_usage": 0,
-			"disk_usage":   0,
-			"uptime":       0,
+			"cpu_usage":    "-",
+			"memory_usage": "-",
+			"disk_usage":   "-",
+			"uptime":       "-",
+			"load":         "-",
+			"open_ports":   "-",
 		}
 
-		if metric != nil {
-			summary["cpu_usage"] = metric.CPUUsage
-			summary["memory_usage"] = metric.MemoryUsage
-			summary["disk_usage"] = metric.DiskUsage
-			summary["uptime"] = metric.UptimeSeconds
+		if err == nil && metric != nil {
+			summary["cpu_usage"] = fmt.Sprintf("%.0f", metric.CPUUsage)
+			summary["memory_usage"] = fmt.Sprintf("%.0f", metric.MemoryUsage)
+			summary["disk_usage"] = fmt.Sprintf("%.0f", metric.DiskUsage)
+			summary["load"] = fmt.Sprintf("%.2f", metric.LoadAverage1)
+			if metric.UptimeSeconds > 0 {
+				days := metric.UptimeSeconds / 86400
+				hours := (metric.UptimeSeconds % 86400) / 3600
+				mins := (metric.UptimeSeconds % 3600) / 60
+				if days > 0 {
+					summary["uptime"] = fmt.Sprintf("%dd %dh %dm", days, hours, mins)
+				} else if hours > 0 {
+					summary["uptime"] = fmt.Sprintf("%dh %dm", hours, mins)
+				} else {
+					summary["uptime"] = fmt.Sprintf("%dm", mins)
+				}
+			}
 		}
 
-		_ = topCPU
-		_ = topMem
-		_ = ports
-		_ = services
+		if len(ports) > 0 {
+			summary["open_ports"] = len(ports)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(summary)
@@ -823,6 +833,12 @@ func handleGetSettings(store *sqlite.Store, cfg *config.Config) http.HandlerFunc
 
 		setupCompleted, _ := store.GetSetting(ctx, "setup_completed")
 
+		// Read AI settings from database (user may have updated them)
+		aiEnabled, _ := store.GetSetting(ctx, "ai_enabled")
+		aiProvider, _ := store.GetSetting(ctx, "ai_provider")
+		aiModel, _ := store.GetSetting(ctx, "ai_model")
+		aiAPIKey, _ := store.GetSetting(ctx, "ai_api_key")
+
 		settings := map[string]any{
 			"setup_completed": setupCompleted == "true",
 			"server": map[string]any{
@@ -830,10 +846,11 @@ func handleGetSettings(store *sqlite.Store, cfg *config.Config) http.HandlerFunc
 				"port":         cfg.Server.Port,
 			},
 			"ai": map[string]any{
-				"enabled":  cfg.AI.Enabled,
-				"provider": cfg.AI.Provider,
-				"model":   cfg.AI.Model,
-				"has_key":  cfg.AI.APIKey != "",
+				"enabled":  aiEnabled == "true",
+				"provider": aiProvider,
+				"model":   aiModel,
+				"has_key":  aiAPIKey != "",
+				"api_key":  "", // Never expose API key
 			},
 			"monitoring": map[string]any{
 				"interval_seconds":           cfg.Monitoring.IntervalSeconds,
@@ -869,18 +886,19 @@ func handleUpdateAISettings(store *sqlite.Store, cfg *config.Config) http.Handle
 			return
 		}
 
-		// Store AI settings in config via store (they'll be reloaded on restart)
-		// For MVP, we just validate and store in settings table
+		// Store AI settings in database
+		_ = store.SetSetting(r.Context(), "ai_provider", req.Provider)
+		_ = store.SetSetting(r.Context(), "ai_model", req.Model)
+		_ = store.SetSetting(r.Context(), "ai_enabled", strconv.FormatBool(req.Enabled))
+		// Only update API key if provided (don't clear existing key)
 		if req.APIKey != "" {
-			_ = store.SetSetting(r.Context(), "ai_provider", req.Provider)
-			_ = store.SetSetting(r.Context(), "ai_model", req.Model)
-			_ = store.SetSetting(r.Context(), "ai_enabled", strconv.FormatBool(req.Enabled))
-			_ = store.InsertAuditLog(r.Context(), "settings_updated", "admin", "AI settings updated", map[string]any{
-				"provider": req.Provider,
-				"model":   req.Model,
-				"enabled":  req.Enabled,
-			})
+			_ = store.SetSetting(r.Context(), "ai_api_key", req.APIKey)
 		}
+		_ = store.InsertAuditLog(r.Context(), "settings_updated", "admin", "AI settings updated", map[string]any{
+			"provider": req.Provider,
+			"model":   req.Model,
+			"enabled":  req.Enabled,
+		})
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]bool{"success": true})
@@ -993,7 +1011,9 @@ func handleUpdateCheck(store *sqlite.Store) http.HandlerFunc {
 
 		currentVersion := "0.1.0"
 		needsUpdate := false
-		if latestVersion != "" && latestVersion != currentVersion {
+		latestClean := strings.TrimPrefix(latestVersion, "v")
+		currentClean := strings.TrimPrefix(currentVersion, "v")
+		if latestVersion != "" && latestClean != currentClean {
 			needsUpdate = true
 		}
 
