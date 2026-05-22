@@ -7,7 +7,9 @@ CONFIG_DIR="/etc/opsagent"
 DATA_DIR="/var/lib/opsagent"
 LOG_DIR="/var/log/opsagent"
 SERVICE_FILE="/etc/systemd/system/opsagent.service"
-BINARY_URL_BASE="${OPSAGENT_URL:-https://github.com/ardakaraosmanoglu/opsAgent/releases/latest/download}"
+# Get latest release tag dynamically
+LATEST_TAG=$(curl -fsSL https://api.github.com/repos/ardakaraosmanoglu/opsAgent/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": "\([^"]*\)".*/\1/')
+BINARY_URL_BASE="${OPSAGENT_URL:-https://github.com/ardakaraosmanoglu/opsAgent/releases/download/${LATEST_TAG}}"
 
 if [[ "$EUID" -ne 0 ]]; then
     echo "Please run as root or with sudo."
