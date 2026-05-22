@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import SetupPage from './pages/SetupPage'
 import LoginPage from './pages/LoginPage'
+import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
 import AlertsPage from './pages/AlertsPage'
 import AssistantPage from './pages/AssistantPage'
@@ -54,7 +55,7 @@ function App() {
         <Route path="/" element={
           !authenticated ? <Navigate to="/login" /> :
           setupRequired ? <Navigate to="/setup" /> :
-          <DashboardPage />
+          <Layout />
         }>
           <Route index element={<Navigate to="/dashboard" />} />
           <Route path="dashboard" element={<DashboardPage />} />
